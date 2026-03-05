@@ -1,0 +1,202 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  user
+  guest
+}
+
+enum OrderAddressType {
+  shipping
+  billing
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
+/* =======================
+   USERS
+======================= */
+model user {
+  id            Int   @id @default(autoincrement())
+  name          String?
+  email         String   @unique
+  password_hash  String?
+  role          UserRole @default(user)
+  avatar_url     String?
+  phone         String?
+  is_verified    Boolean  @default(false)
+  last_login_at   DateTime?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  status_id     Int?
+  status        Status?  @relation(fields: [status_id], references: [id])
+
+
+  addresses     Address[]
+  orders        Order[]
+  ratings       ProductRating[]
+  paymentMethods PaymentMethod[]
+}
+
+/* =======================
+   PRODUCTS
+======================= */
+model Product {
+  id          Int   @id @default(autoincrement())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10,2)
+  sku         String?  @unique
+  stock       Int      @default(0)
+  featured    Boolean  @default(false)
+  discount    Decimal? @db.Decimal(5,2)
+  size        String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updated_at
+
+  status_id    Int?
+  status      Status? @relation(fields: [status_id], references: [id])
+
+  ratings     ProductRating[]
+  categories  ProductCategory[]
+  images      ProductImage[]
+  tags        ProductTag[]
+  orderItems  OrderItem[]
+}
+
+
+
+/* =======================
+   PRODUCT RATINGS
+======================= */
+model ProductRating {
+  id        Int   @id @default(autoincrement())
+  rating    Int
+  comment   String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updated_at
+  
+  user_id    Int
+  user      User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  product_id Int
+  product   Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, product_id])
+}
+
+
+/* =======================
+   ADDRESSES
+======================= */
+model Address {
+  id        Int    @id @default(autoincrement())
+  street    String
+  city      String
+  state     String
+  zipCode   String
+  country   String
+  phone     String?
+  isDefault Boolean  @default(false)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user_id    Int?
+  user      User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  status_id  Int?
+  status    Status?  @relation(fields: [status_id], references: [id])
+}
+
+
+/* =======================
+   ORDERS
+======================= */
+model Order {
+  id              Int           @id @default(autoincrement())
+  guest_email      String?
+  buyer_full_name   String?
+  payment_method            String?
+  payment_status            PaymentStatus @default(pending)
+  payment_method_provider    String?
+  payment_method_reference   String?
+  subtotal                 Decimal? @db.Decimal(10,2)
+  shipping_cost             Decimal? @db.Decimal(10,2)
+  total                    Decimal? @db.Decimal(10,2)
+  currency                 String?
+  confirmation_sent         Boolean  @default(false)
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+
+  user_id          Int?
+  user            User?          @relation(fields: [user_id], references: [id])
+
+  order_status_id   Int
+  order_status     order_status @relation(fields: [order_status_id], references: [id])
+
+  payment_status_id String
+  payment_status   payment_status @relation(fields: [payment_status_id], references: [id])
+
+  items                    OrderItem[]
+  addresses                OrderAddress[]
+}
+
+/* =======================
+   ORDER ADDRESSES 
+======================= */
+
+model order_address {
+  id            Int            @id @default(autoincrement())
+  type          OrderAddressType
+  recipient_name String?
+  phone         String?
+  street        String?
+  city          String?
+  state         String?
+  zipCode       String?
+  country       String?
+
+  order_id       Int
+  order         order             @relation(fields: [order_id], references: [id], onDelete: Cascade)
+}
+
+/* =======================
+   ORDER ITEMS (pivot)
+======================= */
+model order_item {
+  id                  Int   @id @default(autoincrement())
+  product_name_snapshot String
+  quantity            Int
+  price               Decimal  @db.Decimal(10,2)
+  subtotal            Decimal? @db.Decimal(10,2)
+
+  order_id              Int
+  order                order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  product_id            Int?
+  product              product? @relation(fields: [product_id], references: [id])
+
+  status_id             Int?
+  status               Status? @relation(fields: [status_id], references: [id])
+
+  @@unique([order_id, product_id])
+}
